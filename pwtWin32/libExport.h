@@ -19,7 +19,7 @@
 
 #include <QtCompilerDetection>
 
-#if defined(PWTWIN32_LIBRARY)
+#ifdef PWTWIN32_LIBRARY
 #define PWTWIN32_EXPORT Q_DECL_EXPORT
 #else
 #define PWTWIN32_EXPORT Q_DECL_IMPORT

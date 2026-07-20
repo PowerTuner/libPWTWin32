@@ -19,12 +19,12 @@
 
 namespace PWTW32 {
     bool regReadSZ(HKEY hkey, LPCWSTR subKey, LPCWSTR value, QString &result, QString &error, const bool log) {
-        std::unique_ptr<TCHAR[]> buf;
+        std::unique_ptr<wchar_t[]> buf;
         DWORD bufSz;
         HKEY rkey;
         LSTATUS ret;
 
-        ret = RegOpenKeyEx(hkey, subKey, 0, KEY_READ, &rkey);
+        ret = RegOpenKeyExW(hkey, subKey, 0, KEY_READ, &rkey);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to open %1, value: %2, code: %3").arg(subKey, value).arg(ret);
@@ -32,7 +32,7 @@ namespace PWTW32 {
             return false;
         }
 
-        ret = RegGetValue(rkey, nullptr, value, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, nullptr, &bufSz);
+        ret = RegGetValueW(rkey, nullptr, value, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, nullptr, &bufSz);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to read size for %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -41,10 +41,10 @@ namespace PWTW32 {
             return false;
         }
 
-        bufSz += sizeof(TCHAR);
-        buf = std::make_unique<TCHAR[]>(bufSz);
+        bufSz += sizeof(wchar_t);
+        buf = std::make_unique<wchar_t[]>(bufSz);
 
-        ret = RegGetValue(rkey, nullptr, value, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, buf.get(), &bufSz);
+        ret = RegGetValueW(rkey, nullptr, value, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, buf.get(), &bufSz);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to read %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -63,7 +63,7 @@ namespace PWTW32 {
         HKEY rkey;
         LSTATUS ret;
 
-        ret = RegOpenKeyEx(hkey, subKey, 0, KEY_READ, &rkey);
+        ret = RegOpenKeyExW(hkey, subKey, 0, KEY_READ, &rkey);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to open %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -71,7 +71,7 @@ namespace PWTW32 {
             return false;
         }
 
-        ret = RegGetValue(rkey, nullptr, value, RRF_RT_REG_DWORD, nullptr, result, &dwSize);
+        ret = RegGetValueW(rkey, nullptr, value, RRF_RT_REG_DWORD, nullptr, result, &dwSize);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to read %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -87,7 +87,7 @@ namespace PWTW32 {
         HKEY rkey;
         LSTATUS ret;
 
-        ret = RegOpenKeyEx(hkey, subKey, 0, KEY_SET_VALUE, &rkey);
+        ret = RegOpenKeyExW(hkey, subKey, 0, KEY_SET_VALUE, &rkey);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to open %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -95,7 +95,7 @@ namespace PWTW32 {
             return false;
         }
 
-        ret = RegSetValueEx(rkey, value, 0, type, reinterpret_cast<const BYTE *>(str.toStdWString().c_str()), (str.size() + 1) * sizeof(TCHAR));
+        ret = RegSetValueExW(rkey, value, 0, type, reinterpret_cast<const BYTE *>(str.toStdWString().c_str()), (str.size() + 1) * sizeof(wchar_t));
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to write %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -114,7 +114,7 @@ namespace PWTW32 {
         HKEY rkey;
         LSTATUS ret;
 
-        ret = RegOpenKeyEx(hkey, subKey, 0, KEY_READ, &rkey);
+        ret = RegOpenKeyExW(hkey, subKey, 0, KEY_READ, &rkey);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to open %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -122,7 +122,7 @@ namespace PWTW32 {
             return nullptr;
         }
 
-        ret = RegGetValue(rkey, nullptr, value, RRF_RT_REG_BINARY, nullptr, nullptr, &bufSz);
+        ret = RegGetValueW(rkey, nullptr, value, RRF_RT_REG_BINARY, nullptr, nullptr, &bufSz);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to read size for %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -134,7 +134,7 @@ namespace PWTW32 {
         *size = bufSz;
         buf = std::make_unique<BYTE[]>(bufSz);
 
-        ret = RegGetValue(rkey, nullptr, value, RRF_RT_REG_BINARY, nullptr, buf.get(), &bufSz);
+        ret = RegGetValueW(rkey, nullptr, value, RRF_RT_REG_BINARY, nullptr, buf.get(), &bufSz);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("failed to read %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -151,7 +151,7 @@ namespace PWTW32 {
         HKEY rkey;
         LSTATUS ret;
 
-        ret = RegOpenKeyEx(hkey, subKey, 0, KEY_SET_VALUE, &rkey);
+        ret = RegOpenKeyExW(hkey, subKey, 0, KEY_SET_VALUE, &rkey);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("Failed to open %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -159,7 +159,7 @@ namespace PWTW32 {
             return false;
         }
 
-        ret = RegDeleteValue(rkey, value);
+        ret = RegDeleteValueW(rkey, value);
         if (ret != ERROR_SUCCESS && ret != ERROR_FILE_NOT_FOUND) {
             if (log)
                 error = QString("Failed to unset %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -176,7 +176,7 @@ namespace PWTW32 {
         HKEY rkey;
         LSTATUS ret;
 
-        ret = RegOpenKeyEx(hkey, subKey, 0, KEY_QUERY_VALUE, &rkey);
+        ret = RegOpenKeyExW(hkey, subKey, 0, KEY_QUERY_VALUE, &rkey);
         if (ret != ERROR_SUCCESS) {
             if (log)
                 error = QString("Failed to open %1, value: %2, code %3").arg(subKey, value).arg(ret);
@@ -184,7 +184,7 @@ namespace PWTW32 {
             return false;
         }
 
-        ret = RegQueryValueEx(rkey, value, nullptr, nullptr, nullptr, nullptr);
+        ret = RegQueryValueExW(rkey, value, nullptr, nullptr, nullptr, nullptr);
         result = ret == ERROR_SUCCESS;
 
         RegCloseKey(rkey);

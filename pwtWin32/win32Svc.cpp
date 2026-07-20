@@ -23,7 +23,7 @@
 
 #include "win32Svc.h"
 
-#define SVCNAME TEXT("PowerTunerDaemon")
+#define SVCNAME L"PowerTunerDaemon"
 
 namespace PWTW32 {
     bool stopService(QString &error) {
@@ -35,13 +35,13 @@ namespace PWTW32 {
         DWORD bytesNeed = 0;
         HANDLE svcProc;
 
-        scManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
+        scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
             error = QString("failed to open sc manager: %1").arg(GetLastError());
             return false;
         }
 
-        service = OpenService(scManager, SVCNAME, SERVICE_STOP | SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, SVCNAME, SERVICE_STOP | SERVICE_QUERY_STATUS);
         if (service == nullptr) {
             const DWORD lastErr = GetLastError();
 
@@ -112,13 +112,13 @@ namespace PWTW32 {
         SC_HANDLE scManager;
         SC_HANDLE service;
 
-        scManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
+        scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
             error = QString("failed to open sc manager: %1").arg(GetLastError());
             return false;
         }
 
-        service = OpenService(scManager, SVCNAME, SERVICE_START | SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, SVCNAME, SERVICE_START | SERVICE_QUERY_STATUS);
         if (service == nullptr) {
             error = QString("failed to open service: %1").arg(GetLastError());
             CloseServiceHandle(scManager);
@@ -136,7 +136,7 @@ namespace PWTW32 {
             return true;
         }
 
-        if (!StartService(service, 0, nullptr)) {
+        if (!StartServiceW(service, 0, nullptr)) {
             error = QString("failed to start service: %1").arg(GetLastError());
             goto err_abort;
         }
@@ -168,13 +168,13 @@ namespace PWTW32 {
     }
 
     bool deleteService(QString &error) {
-        SC_HANDLE scManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
+        SC_HANDLE scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
             error = QString("failed to open sc manager: %1").arg(GetLastError());
             return false;
         }
 
-        SC_HANDLE service = OpenService(scManager, SVCNAME, DELETE);
+        SC_HANDLE service = OpenServiceW(scManager, SVCNAME, DELETE);
         if (service == nullptr) {
             const DWORD lastErr = GetLastError();
 
@@ -196,18 +196,18 @@ namespace PWTW32 {
     }
 
     bool installService(const QString &exePath, QString &error) {
-        TCHAR description[] = L"PowerTuner daemon allows you to control various aspects of your device to better fit your needs: battery life, performance or a balance of both.";
+        wchar_t description[] = L"PowerTuner daemon allows you to control various aspects of your device to better fit your needs: battery life, performance or a balance of both.";
         SERVICE_DESCRIPTION svcDesc {.lpDescription = description};
         SC_HANDLE scManager;
         SC_HANDLE service;
 
-        scManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
+        scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
         if (scManager == nullptr) {
             error = QString("failed to open sc manager: %1").arg(GetLastError());
             return false;
         }
 
-        service = OpenService(scManager, SVCNAME, SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, SVCNAME, SERVICE_QUERY_STATUS);
         if (service != nullptr || GetLastError() != ERROR_SERVICE_DOES_NOT_EXIST) {
             const DWORD lastErr = GetLastError();
 
@@ -222,14 +222,14 @@ namespace PWTW32 {
             return true;
         }
 
-        service = CreateService(scManager, SVCNAME, SVCNAME, SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, exePath.toStdWString().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr);
+        service = CreateServiceW(scManager, SVCNAME, SVCNAME, SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, exePath.toStdWString().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr);
         if (service == nullptr) {
             error = QString("failed to create service: %1").arg(GetLastError());
             CloseServiceHandle(scManager);
             return false;
         }
 
-        ChangeServiceConfig2(service, SERVICE_CONFIG_DESCRIPTION, &svcDesc);
+        ChangeServiceConfig2W(service, SERVICE_CONFIG_DESCRIPTION, &svcDesc);
         CloseServiceHandle(service);
         CloseServiceHandle(scManager);
         return true;
@@ -249,7 +249,7 @@ namespace PWTW32 {
 
         procEntry.dwSize = sizeof(PROCESSENTRY32);
 
-        if (!Process32First(procsShot, &procEntry)) {
+        if (!Process32FirstW(procsShot, &procEntry)) {
             error = QString("failed to read first process entry, code %1").arg(GetLastError());
             CloseHandle(procsShot);
             return false;
@@ -276,7 +276,7 @@ namespace PWTW32 {
 
             WaitForSingleObject(proc, 10 * 1000);
             CloseHandle(proc);
-        } while (Process32Next(procsShot, &procEntry));
+        } while (Process32NextW(procsShot, &procEntry));
 
         CloseHandle(procsShot);
         return true;
@@ -287,13 +287,13 @@ namespace PWTW32 {
         SC_HANDLE scManager;
         SC_HANDLE service;
 
-        scManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
+        scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
             error = QString("failed to open sc manager: %1").arg(GetLastError());
             return false;
         }
 
-        service = OpenService(scManager, SVCNAME, SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, SVCNAME, SERVICE_QUERY_STATUS);
         if (service == nullptr) {
             const DWORD lastErr = GetLastError();
 
