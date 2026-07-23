@@ -17,15 +17,23 @@
  */
 #pragma once
 
-#include <QString>
-
-#include "libExport.h"
+#include <chrono>
 
 namespace PWTW32 {
-    [[nodiscard]] PWTWIN32_EXPORT bool stopService(QString &error);
-    [[nodiscard]] PWTWIN32_EXPORT bool startService(QString &error);
-    [[nodiscard]] PWTWIN32_EXPORT bool deleteService(QString &error);
-    [[nodiscard]] PWTWIN32_EXPORT bool installService(const QString &exePath, QString &error);
-    [[nodiscard]] PWTWIN32_EXPORT bool closeRunningApps(QString &error);
-    [[nodiscard]] PWTWIN32_EXPORT bool isServiceRunning(QString &error);
+    class ElapsedTimer final {
+    private:
+        std::chrono::time_point<std::chrono::steady_clock> startTime;
+
+    public:
+        void start() {
+            startTime = std::chrono::steady_clock::now();
+        }
+
+        [[nodiscard]]
+        bool hasExpired(const std::chrono::milliseconds &ms) const {
+            const auto now = std::chrono::steady_clock::now();
+
+            return std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime) < ms;
+        }
+    };
 }

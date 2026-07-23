@@ -17,10 +17,8 @@
  */
 #pragma once
 
-#include <QtCompilerDetection>
-
 #ifdef PWTWIN32_LIBRARY
-#define PWTWIN32_EXPORT Q_DECL_EXPORT
+#define LIB_EXPORT __declspec(dllexport)
 #else
-#define PWTWIN32_EXPORT Q_DECL_IMPORT
+#define LIB_EXPORT __declspec(dllimport)
 #endif

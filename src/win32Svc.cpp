@@ -15,21 +15,22 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "win.h"
-
-#include <tlhelp32.h>
-#include <QThread>
-#include <QElapsedTimer>
-
 #include "win32Svc.h"
+#include <tlhelp32.h>
+#include <format>
+#include <thread>
 
-#define SVCNAME L"PowerTunerDaemon"
+#include "elapsedTimer.h"
 
-namespace PWTW32 {
-    bool stopService(QString &error) {
+#define LOG(msg) if (logcb) logcb(msg);
+
+namespace PWTSVC {
+    bool stopService(LPCWSTR name, const std::function<void(const std::wstring &)> &logcb) {
+        using namespace std::chrono_literals;
+
         SERVICE_STATUS_PROCESS svcProcStat {};
         SERVICE_STATUS svcStat {};
-        QElapsedTimer stopTimer {};
+        PWTW32::ElapsedTimer stopTimer {};
         SC_HANDLE scManager;
         SC_HANDLE service;
         DWORD bytesNeed = 0;
@@ -37,23 +38,23 @@ namespace PWTW32 {
 
         scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
-            error = QString("failed to open sc manager: %1").arg(GetLastError());
+            LOG(std::format(L"failed to open sc manager: {}", GetLastError()));
             return false;
         }
 
-        service = OpenServiceW(scManager, SVCNAME, SERVICE_STOP | SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, name, SERVICE_STOP | SERVICE_QUERY_STATUS);
         if (service == nullptr) {
             const DWORD lastErr = GetLastError();
 
             if (lastErr != ERROR_SERVICE_DOES_NOT_EXIST)
-                error = QString("failed to open PowerTuner service: %1").arg(lastErr);
+                LOG(std::format(L"failed to open {} service: {}", name, lastErr))
 
             CloseServiceHandle(scManager);
             return lastErr == ERROR_SERVICE_DOES_NOT_EXIST;
         }
 
         if (!QueryServiceStatus(service, &svcStat)) {
-            error = QString("failed to query PowerTuner service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to query {} service: {}", name, GetLastError()))
             goto err_abort;
         }
 
@@ -64,14 +65,14 @@ namespace PWTW32 {
         }
 
         if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, reinterpret_cast<LPBYTE>(&svcProcStat), sizeof(SERVICE_STATUS_PROCESS), &bytesNeed)) {
-            error = QString("failed to query PowerTuner service process: %1").arg(GetLastError());
+            LOG(std::format(L"failed to query {} service process: {}", name, GetLastError()))
             goto err_abort;
         }
 
         svcProc = OpenProcess(SYNCHRONIZE, FALSE, svcProcStat.dwProcessId);
 
         if (!ControlService(service, SERVICE_CONTROL_STOP, &svcStat)) {
-            error = QString("failed to send stop command to PowerTuner service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to send stop command to {} service: {}", name, GetLastError()))
             CloseHandle(svcProc);
             goto err_abort;
         }
@@ -79,16 +80,16 @@ namespace PWTW32 {
         stopTimer.start();
 
         while (svcStat.dwCurrentState != SERVICE_STOPPED) {
-            if (stopTimer.hasExpired(4000)) {
-                error = "failed to stop PowerTuner service: timed out";
+            if (stopTimer.hasExpired(4000ms)) {
+                LOG(std::format(L"failed to stop {} service: timed out", name))
                 CloseHandle(svcProc);
                 goto err_abort;
             }
 
-            QThread::msleep(15);
+            std::this_thread::sleep_for(15ms);
 
             if (!QueryServiceStatus(service, &svcStat)) {
-                error = QString("failed to query PowerTuner service status: %1").arg(GetLastError());
+                LOG(std::format(L"failed to query {} service status: {}", name, GetLastError()))
                 CloseHandle(svcProc);
                 goto err_abort;
             }
@@ -106,27 +107,29 @@ namespace PWTW32 {
         return false;
     }
 
-    bool startService(QString &error) {
+    bool startService(LPCWSTR name, const std::function<void(const std::wstring &)> &logcb) {
+        using namespace std::chrono_literals;
+
         SERVICE_STATUS svcStat {};
-        QElapsedTimer startTimer {};
+        PWTW32::ElapsedTimer startTimer {};
         SC_HANDLE scManager;
         SC_HANDLE service;
 
         scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
-            error = QString("failed to open sc manager: %1").arg(GetLastError());
+            LOG(std::format(L"failed to open sc manager: {}", GetLastError()))
             return false;
         }
 
-        service = OpenServiceW(scManager, SVCNAME, SERVICE_START | SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, name, SERVICE_START | SERVICE_QUERY_STATUS);
         if (service == nullptr) {
-            error = QString("failed to open service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to open {} service: {}", name, GetLastError()))
             CloseServiceHandle(scManager);
             return false;
         }
 
         if (!QueryServiceStatus(service, &svcStat)) {
-            error = QString("failed to query PowerTuner service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to query {} service: {}", name, GetLastError()))
             goto err_abort;
         }
 
@@ -137,22 +140,22 @@ namespace PWTW32 {
         }
 
         if (!StartServiceW(service, 0, nullptr)) {
-            error = QString("failed to start service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to start {} service: {}", name, GetLastError()))
             goto err_abort;
         }
 
         startTimer.start();
 
         while (svcStat.dwCurrentState != SERVICE_RUNNING) {
-            if (startTimer.hasExpired(4000)) {
-                error = "Failed to start the service, timed out";
+            if (startTimer.hasExpired(4000ms)) {
+                LOG(std::format(L"Failed to start {} service, timed out", name))
                 goto err_abort;
             }
 
-            QThread::msleep(15);
+            std::this_thread::sleep_for(15ms);
 
             if (!QueryServiceStatus(service, &svcStat)) {
-                error = QString("Failed to query service status: %1").arg(GetLastError());
+                LOG(std::format(L"Failed to query {} service status: {}", name, GetLastError()))
                 goto err_abort;
             }
         }
@@ -167,19 +170,19 @@ namespace PWTW32 {
         return false;
     }
 
-    bool deleteService(QString &error) {
+    bool deleteService(LPCWSTR name, const std::function<void(const std::wstring &)> &logcb) {
         SC_HANDLE scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
-            error = QString("failed to open sc manager: %1").arg(GetLastError());
+            LOG(std::format(L"failed to open sc manager: {}", GetLastError()))
             return false;
         }
 
-        SC_HANDLE service = OpenServiceW(scManager, SVCNAME, DELETE);
+        SC_HANDLE service = OpenServiceW(scManager, name, DELETE);
         if (service == nullptr) {
             const DWORD lastErr = GetLastError();
 
             if (lastErr != ERROR_SERVICE_DOES_NOT_EXIST)
-                error = QString("failed to open PowerTuner service: %1").arg(lastErr);
+                LOG(std::format(L"failed to open {} service: {}", name, lastErr))
 
             CloseServiceHandle(scManager);
             return lastErr == ERROR_SERVICE_DOES_NOT_EXIST;
@@ -188,14 +191,14 @@ namespace PWTW32 {
         const bool res = DeleteService(service) == TRUE;
 
         if (!res)
-            error = QString("failed to delete old service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to delete {} service: {}", name, GetLastError()))
 
         CloseServiceHandle(service);
         CloseServiceHandle(scManager);
         return res;
     }
 
-    bool installService(const QString &exePath, QString &error) {
+    bool installService(LPCWSTR name, const std::wstring &exePath, const std::function<void(const std::wstring &)> &logcb) {
         wchar_t description[] = L"PowerTuner daemon allows you to control various aspects of your device to better fit your needs: battery life, performance or a balance of both.";
         SERVICE_DESCRIPTION svcDesc {.lpDescription = description};
         SC_HANDLE scManager;
@@ -203,11 +206,11 @@ namespace PWTW32 {
 
         scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
         if (scManager == nullptr) {
-            error = QString("failed to open sc manager: %1").arg(GetLastError());
+            LOG(std::format(L"failed to open sc manager: {}", GetLastError()))
             return false;
         }
 
-        service = OpenServiceW(scManager, SVCNAME, SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, name, SERVICE_QUERY_STATUS);
         if (service != nullptr || GetLastError() != ERROR_SERVICE_DOES_NOT_EXIST) {
             const DWORD lastErr = GetLastError();
 
@@ -215,16 +218,16 @@ namespace PWTW32 {
             CloseServiceHandle(scManager);
 
             if (lastErr != ERROR_SUCCESS) {
-                error = QString("failed to check service existence: %1").arg(GetLastError());
+                LOG(std::format(L"failed to check {} service existence: {}", name, GetLastError()))
                 return false;
             }
 
             return true;
         }
 
-        service = CreateServiceW(scManager, SVCNAME, SVCNAME, SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, exePath.toStdWString().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr);
+        service = CreateServiceW(scManager, name, name, SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, exePath.c_str(), nullptr, nullptr, nullptr, nullptr, nullptr);
         if (service == nullptr) {
-            error = QString("failed to create service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to create {} service: {}", name, GetLastError()))
             CloseServiceHandle(scManager);
             return false;
         }
@@ -235,40 +238,37 @@ namespace PWTW32 {
         return true;
     }
 
-    bool closeRunningApps(QString &error) {
-        static constexpr std::array<std::wstring_view, 4> procList = {{
-            L"PowerTunerDaemon.exe", L"PowerTunerCLI.exe", L"PowerTunerClient.exe", L"PowerTunerConsole.exe"
-        }};
+    bool closeRunningApps(const std::vector<std::wstring> &list, const std::function<void(const std::wstring &)> &logcb) {
         HANDLE procsShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         PROCESSENTRY32 procEntry;
 
         if (procsShot == INVALID_HANDLE_VALUE) {
-            error = QString("failed to get process list snapshot, code %1").arg(GetLastError());
+            LOG(std::format(L"failed to get process list snapshot, code: {}", GetLastError()))
             return false;
         }
 
         procEntry.dwSize = sizeof(PROCESSENTRY32);
 
         if (!Process32FirstW(procsShot, &procEntry)) {
-            error = QString("failed to read first process entry, code %1").arg(GetLastError());
+            LOG(std::format(L"failed to read first process entry, code: {}", GetLastError()))
             CloseHandle(procsShot);
             return false;
         }
 
         do {
-            if (std::find(procList.begin(), procList.end(), procEntry.szExeFile) == procList.end())
+            if (std::find(list.begin(), list.end(), procEntry.szExeFile) == list.end())
                 continue;
 
             HANDLE proc = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, procEntry.th32ProcessID);
 
             if (proc == nullptr) {
-                error = QString("failed to grab %1 process, code %2").arg(procEntry.szExeFile).arg(GetLastError());
+                LOG(std::format(L"failed to grab {} process, code: {}", procEntry.szExeFile, GetLastError()))
                 CloseHandle(procsShot);
                 return false;
             }
 
             if (!TerminateProcess(proc, 0)) {
-                error = QString("failed to terminate %1 process, code %2").arg(procEntry.szExeFile).arg(GetLastError());
+                LOG(std::format(L"failed to terminate {} process, code: {}", procEntry.szExeFile, GetLastError()))
                 CloseHandle(proc);
                 CloseHandle(procsShot);
                 return false;
@@ -282,33 +282,35 @@ namespace PWTW32 {
         return true;
     }
 
-    bool isServiceRunning(QString &error) {
+    std::optional<bool> isServiceRunning(LPCWSTR name, const std::function<void(const std::wstring &)> &logcb) {
         SERVICE_STATUS svcStat {};
         SC_HANDLE scManager;
         SC_HANDLE service;
 
         scManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
         if (scManager == nullptr) {
-            error = QString("failed to open sc manager: %1").arg(GetLastError());
-            return false;
+            LOG(std::format(L"failed to open sc manager: {}", GetLastError()))
+            return {};
         }
 
-        service = OpenServiceW(scManager, SVCNAME, SERVICE_QUERY_STATUS);
+        service = OpenServiceW(scManager, name, SERVICE_QUERY_STATUS);
         if (service == nullptr) {
             const DWORD lastErr = GetLastError();
 
-            if (lastErr != ERROR_SERVICE_DOES_NOT_EXIST)
-                error = QString("failed to open PowerTuner service: %1").arg(lastErr);
+            if (lastErr != ERROR_SERVICE_DOES_NOT_EXIST) {
+                LOG(std::format(L"failed to open {} service: {}", name, lastErr))
+                return {};
+            }
 
             CloseServiceHandle(scManager);
             return false;
         }
 
         if (!QueryServiceStatus(service, &svcStat)) {
-            error = QString("failed to query PowerTuner service: %1").arg(GetLastError());
+            LOG(std::format(L"failed to query {} service: {}", name, GetLastError()))
             CloseServiceHandle(service);
             CloseServiceHandle(scManager);
-            return false;
+            return {};
         }
 
         CloseServiceHandle(service);
